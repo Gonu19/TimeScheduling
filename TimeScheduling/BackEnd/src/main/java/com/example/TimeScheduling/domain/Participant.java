@@ -31,6 +31,12 @@ public class Participant {
     @Column(name = "nickname", length = 50, nullable = false)
     private String nickname;
 
+    @Column(name = "role", length = 50)
+    private String role;
+
+    @Column(name = "is_mandatory", nullable = false)
+    private boolean isMandatory;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
