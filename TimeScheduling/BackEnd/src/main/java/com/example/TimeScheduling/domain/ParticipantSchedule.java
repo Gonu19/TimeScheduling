@@ -73,4 +73,14 @@ public class ParticipantSchedule {
     @Builder.Default
     @Column(name = "version", nullable = false)
     private Integer version = 0;
+
+    public void updateBitmasks(long b0, long b1, long b2, long b3, long b4, long b5, long b6) {
+        this.bitmask0 = b0;
+        this.bitmask1 = b1;
+        this.bitmask2 = b2;
+        this.bitmask3 = b3;
+        this.bitmask4 = b4;
+        this.bitmask5 = b5;
+        this.bitmask6 = b6;
+    }
 }
