@@ -1,0 +1,1 @@
+const fs = require("fs"); let t = fs.readFileSync("src/app/components/DashboardScreen.tsx", "utf8"); t = t.replace(/role: m\.role \|\| "[^"]*,/, "role: m.role || \"Âü¿©ÀÚ\","); fs.writeFileSync("src/app/components/DashboardScreen.tsx", t, "utf8");

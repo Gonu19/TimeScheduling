@@ -1,0 +1,600 @@
+{
+  "info": {
+    "_postman_id": "848bd1b4-7d52-4a0b-932f-7be8c89b4cfb",
+    "name": "Schedulr API Integration Tests (Full 1.1 ~ 4.2)",
+    "description": "Integration testing collection for Schedulr backend services, fully covering API 1.1 to 4.2 including Load Member Availability and Manual Override.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Happy Path Scenarios",
+      "item": [
+        {
+          "name": "1.1 Create Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Response contains sessionId and adminToken\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.sessionId).to.be.a('string');",
+                  "    pm.expect(jsonData.adminToken).to.be.a('string');",
+                  "    pm.collectionVariables.set(\"sessionId\", jsonData.sessionId);",
+                  "    pm.collectionVariables.set(\"adminToken\", jsonData.adminToken);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Integration Test Session\",\n  \"domainType\": \"MEETING\",\n  \"candidateDates\": [\"2026-06-01\", \"2026-06-02\", \"2026-06-03\", \"2026-06-04\", \"2026-06-05\", \"2026-06-06\", \"2026-06-07\"],\n  \"members\": [\n    {\n      \"name\": \"Member Alpha\",\n      \"role\": \"Leader\",\n      \"isMandatory\": true\n    },\n    {\n      \"name\": \"Member Beta\",\n      \"role\": \"Developer\",\n      \"isMandatory\": true\n    },\n    {\n      \"name\": \"Member Gamma\",\n      \"role\": \"Designer\",\n      \"isMandatory\": false\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/sessions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions"]
+            }
+          }
+        },
+        {
+          "name": "1.2 Verify Admin (Success)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Admin verification returns true\", function () {",
+                  "    const result = pm.response.json();",
+                  "    pm.expect(result).to.eql(true);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"adminToken\": \"{{adminToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/verify-admin",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "verify-admin"]
+            }
+          }
+        },
+        {
+          "name": "1.3 Get Session Info",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Extract and store member IDs\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.members).to.be.an('array').with.lengthOf(3);",
+                  "    pm.collectionVariables.set(\"memberId1\", jsonData.members[0].memberId);",
+                  "    pm.collectionVariables.set(\"memberId2\", jsonData.members[1].memberId);",
+                  "    pm.collectionVariables.set(\"memberId3\", jsonData.members[2].memberId);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/sessions/{{sessionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}"]
+            }
+          }
+        },
+        {
+          "name": "2.1 Submit Availability - Member 1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"availableBitmasks\": [281474976710655, 281474976710655, 0, 0, 0, 0, 0]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/members/{{memberId1}}/availabilities",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "members", "{{memberId1}}", "availabilities"]
+            }
+          }
+        },
+        {
+          "name": "2.1 Submit Availability - Member 2",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"availableBitmasks\": [281474976710655, 0, 0, 281474976710655, 0, 0, 0]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/members/{{memberId2}}/availabilities",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "members", "{{memberId2}}", "availabilities"]
+            }
+          }
+        },
+        {
+          "name": "2.2 Load Member Availability",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Response contains bitmasks and updatedAt\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.availableBitmasks).to.be.an('array').with.lengthOf(7);",
+                  "    pm.expect(jsonData.updatedAt).to.be.a('string');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/members/{{memberId1}}/availabilities",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "members", "{{memberId1}}", "availabilities"]
+            }
+          }
+        },
+        {
+          "name": "3.1 Get Recommendations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Response contains recommendations array\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an('array');",
+                  "    if (jsonData.length > 0) {",
+                  "        pm.expect(jsonData[0].rank).to.eql(1);",
+                  "        pm.collectionVariables.set(\"recommendedDate\", jsonData[0].date);",
+                  "        pm.collectionVariables.set(\"recommendedStart\", jsonData[0].startTime);",
+                  "        pm.collectionVariables.set(\"recommendedEnd\", jsonData[0].endTime);",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/recommendations?mandatoryIds={{memberId1}},{{memberId2}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "recommendations"],
+              "query": [
+                {
+                  "key": "mandatoryIds",
+                  "value": "{{memberId1}},{{memberId2}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "3.2 Confirm Schedule",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"date\": \"{{recommendedDate}}\",\n  \"startTime\": \"{{recommendedStart}}\",\n  \"endTime\": \"{{recommendedEnd}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/confirm",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "confirm"]
+            }
+          }
+        },
+        {
+          "name": "4.1 Get Session Result",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Result matches confirmed schedule\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.sessionId).to.eql(pm.collectionVariables.get(\"sessionId\"));",
+                  "    pm.expect(jsonData.confirmedDate).to.eql(pm.collectionVariables.get(\"recommendedDate\"));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/result",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "result"]
+            }
+          }
+        },
+        {
+          "name": "4.2 Manual Override (Schedule Edit)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Response status is UPDATED\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"UPDATED\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"adjustedSlots\": [\n    {\n      \"time\": \"14:00\",\n      \"removed\": \"Member Alpha\",\n      \"added\": \"Member Beta\"\n    }\n  ],\n  \"overrideReason\": \"강은우 병가로 인한 당일 긴급 교체 투입\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/result",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "result"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Edge Cases & Exception Testing",
+      "item": [
+        {
+          "name": "Verify Admin (Failure - Invalid Token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Admin verification returns false\", function () {",
+                  "    const result = pm.response.json();",
+                  "    pm.expect(result).to.eql(false);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"adminToken\": \"wrong-admin-token-12345\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/verify-admin",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "verify-admin"]
+            }
+          }
+        },
+        {
+          "name": "Update Availability - Array Size Too Small",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"availableBitmasks\": [0, 0, 0, 0, 0, 0]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/members/{{memberId1}}/availabilities",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "members", "{{memberId1}}", "availabilities"]
+            }
+          }
+        },
+        {
+          "name": "Load Member Availability - Not Found Member",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 404 Not Found\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/members/999999/availabilities",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "members", "999999", "availabilities"]
+            }
+          }
+        },
+        {
+          "name": "Manual Override - Missing Authorization Header",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 401 Unauthorized\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"adjustedSlots\": [\n    {\n      \"time\": \"14:00\",\n      \"removed\": \"Member Alpha\",\n      \"added\": \"Member Beta\"\n    }\n  ],\n  \"overrideReason\": \"긴급 수정\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/result",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "result"]
+            }
+          }
+        },
+        {
+          "name": "Manual Override - Missing Reason",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Returns ERR_REASON_REQUIRED error\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.errorCode).to.eql(\"ERR_REASON_REQUIRED\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"adjustedSlots\": [\n    {\n      \"time\": \"14:00\",\n      \"removed\": \"Member Alpha\",\n      \"added\": \"Member Beta\"\n    }\n  ],\n  \"overrideReason\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/result",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "result"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "sessionId",
+      "value": ""
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "memberId1",
+      "value": ""
+    },
+    {
+      "key": "memberId2",
+      "value": ""
+    },
+    {
+      "key": "memberId3",
+      "value": ""
+    },
+    {
+      "key": "recommendedDate",
+      "value": ""
+    },
+    {
+      "key": "recommendedStart",
+      "value": ""
+    },
+    {
+      "key": "recommendedEnd",
+      "value": ""
+    }
+  ]
+}
