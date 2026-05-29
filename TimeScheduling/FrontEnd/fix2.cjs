@@ -1,1 +1,0 @@
-const fs = require("fs"); let t = fs.readFileSync("src/app/components/DashboardScreen.tsx", "utf8"); t = t.replace(/onClick={onBack}>[^<]*\/Button>/g, "onClick={onBack}>Back</Button>"); t = t.replace(/disabled={isLoading}>[^<]*<\/Button>/g, "disabled={isLoading}>Verify</Button>"); fs.writeFileSync("src/app/components/DashboardScreen.tsx", t, "utf8");
