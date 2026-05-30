@@ -27,6 +27,7 @@ function AppLayout() {
   const [error, setError] = useState<string | null>(null);
 
   const [isAdminVerified, setIsAdminVerified] = useState(false);
+  const [adminToken, setAdminToken] = useState<string | null>(null);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminKeyInput, setAdminKeyInput] = useState("");
 
@@ -53,6 +54,7 @@ function AppLayout() {
         })),
         dates: data.candidateDates,
         createdAt: Date.now(),
+        requirementsJson: data.requirementsJson,
       };
       
       const nextSubmissions: Submission[] = data.members
@@ -65,7 +67,31 @@ function AppLayout() {
 
       setSession(nextSession);
       setSubmissions(nextSubmissions);
-      setConfirmed(null);
+
+      if (data.status === "CONFIRMED") {
+        try {
+          const result = await sessionApi.getConfirmedSchedule(sid);
+          const assignments: Record<number, any> = {};
+          data.members.forEach(m => {
+            if (["진행자", "기록자", "참여자", "옵저버", "발표자"].includes(m.role)) {
+              assignments[m.memberId] = m.role;
+            }
+          });
+
+          setConfirmed({
+            title: result.title,
+            confirmedBlocks: result.confirmedBlocks,
+            description: "",
+            confirmedAt: Date.now(),
+            assignments,
+            version: result.version,
+          });
+        } catch (e) {
+          console.error("확정 스케줄 조회 실패:", e);
+        }
+      } else {
+        setConfirmed(null);
+      }
 
       saveStored({
         id: sid,
@@ -119,17 +145,10 @@ function AppLayout() {
     if (c) {
       setIsLoading(true);
       try {
-        const assignments: Record<number, string> = {};
-        if (c.assignments) {
-           for (const [mid, role] of Object.entries(c.assignments)) {
-             assignments[Number(mid)] = role;
-           }
-        }
         await sessionApi.confirmSchedule(session.id, {
-          date: c.date,
-          startSlot: c.start,
-          endSlot: c.end,
-          assignments
+          confirmedBlocks: c.confirmedBlocks,
+          version: c.version || 0,
+          assignments: c.assignments,
         });
         await fetchSession(session.id);
         setConfirmed(c); 
@@ -151,6 +170,7 @@ function AppLayout() {
       const isValid = await sessionApi.verifyAdmin(session.id, adminKeyInput.trim());
       if (isValid) {
         setIsAdminVerified(true);
+        setAdminToken(adminKeyInput.trim());
         setShowAdminModal(false);
         setAdminKeyInput("");
         toast.success("관리자 인증에 성공했습니다.");
@@ -192,7 +212,6 @@ function AppLayout() {
             navigate(`/${sessionId}/${v}`);
           }
         }}
-        onLoadDemo={() => {}}
       />
       
       {session ? (
@@ -201,6 +220,7 @@ function AppLayout() {
             <AvailabilityScreen
               session={session}
               submissions={submissions}
+              confirmed={confirmed}
               onSubmit={handleSubmit}
               onGoDashboard={() => {
                 if (isAdminVerified) navigate(`/${session.id}/dashboard`);
@@ -219,6 +239,9 @@ function AppLayout() {
               isLoading={isLoading}
               isAdminVerified={isAdminVerified}
               setIsAdminVerified={setIsAdminVerified}
+              adminToken={adminToken}
+              onAdminVerify={setAdminToken}
+              onFetchSession={async () => { await fetchSession(session.id); }}
             />
           } />
           <Route path="*" element={<Navigate to={`/${session.id}/availability`} replace />} />
@@ -270,7 +293,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={
           <div className="size-full bg-white relative">
-            <TopNav view="landing" canGoApp={false} onNavigate={() => {}} onLoadDemo={() => {}} />
+            <TopNav view="landing" canGoApp={false} onNavigate={() => {}} />
             <LandingScreen onCreate={handleCreate} onLoadStored={handleLoadStored} />
           </div>
         } />

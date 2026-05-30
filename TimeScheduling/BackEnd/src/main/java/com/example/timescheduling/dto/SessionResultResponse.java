@@ -1,11 +1,10 @@
 package com.example.timescheduling.dto;
 
-import java.time.LocalDate;
+import java.util.List;
 
 public record SessionResultResponse(
     String sessionId,
     String title,
-    LocalDate confirmedDate,
-    String startTime,
-    String endTime
+    List<TimeBlock> confirmedBlocks,
+    Integer version
 ) {}

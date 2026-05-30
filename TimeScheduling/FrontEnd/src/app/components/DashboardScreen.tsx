@@ -20,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
-import { AlertTriangle, RotateCw, Check, CalendarCheck, Star, Pencil, History, Link as LinkIcon } from "lucide-react";
+import { AlertTriangle, RotateCw, Check, CalendarCheck, Star, Pencil, History, Link as LinkIcon, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { HeatmapGrid } from "./HeatmapGrid";
 import type { Column } from "./TimeGrid";
@@ -58,6 +58,9 @@ type Props = {
   isLoading?: boolean;
   isAdminVerified: boolean;
   setIsAdminVerified: (b: boolean) => void;
+  adminToken?: string | null;
+  onAdminVerify?: (token: string) => void;
+  onFetchSession?: () => Promise<void> | void;
 };
 
 export function DashboardScreen({
@@ -70,6 +73,9 @@ export function DashboardScreen({
   isLoading,
   isAdminVerified,
   setIsAdminVerified,
+  adminToken,
+  onAdminVerify,
+  onFetchSession,
 }: Props) {
   const [adminKeyInput, setAdminKeyInput] = useState("");
   const [authError, setAuthError] = useState("");
@@ -82,23 +88,38 @@ export function DashboardScreen({
     if (!confirmed) return;
     setIsChaining(true);
     try {
-      const startDate = new Date(confirmed.date);
-      const isoDates = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(startDate);
-        d.setDate(startDate.getDate() + i);
-        return d.toISOString().slice(0, 10);
-      });
+      let startDateStr = new Date().toISOString().split("T")[0];
       
-      const res = await sessionApi.createSession({
-        title: session.title + " (다음 일정)",
+      if (session.domainType === "WORK" && session.dates && session.dates.length > 0) {
+        const start = new Date(session.dates[0]);
+        start.setDate(start.getDate() + 7);
+        startDateStr = start.toISOString().split("T")[0];
+      } else {
+        if (confirmed.confirmedBlocks && confirmed.confirmedBlocks.length > 0) {
+          startDateStr = confirmed.confirmedBlocks[0].startTime.split("T")[0];
+        }
+      }
+
+      // Title cleanup: remove existing " (YYYY-MM-DD 이후)" to prevent duplication
+      const cleanTitle = session.title.replace(/\s*\(\d{4}-\d{2}-\d{2}\s*이후\)/g, "");
+      const newTitle = `${cleanTitle} (${startDateStr} 이후)`;
+
+      const payload: any = {
+        title: newTitle,
         domainType: session.domainType,
-        candidateDates: isoDates,
+        startDate: startDateStr,
         members: session.members.map(m => ({
           name: m.name,
           role: m.role || "참여자",
           isMandatory: m.isMandatory
         }))
-      });
+      };
+
+      if (session.domainType === "WORK" && session.requirementsJson) {
+        payload.requirementsJson = session.requirementsJson;
+      }
+
+      const res = await sessionApi.createSession(payload);
       window.prompt("새로운 세션이 생성되었습니다! 아래 관리자 UUID를 복사해 두세요.", res.adminToken);
       toast.success("새로운 일정이 생성되었습니다.");
       navigate(`/${res.sessionId}`);
@@ -115,6 +136,7 @@ export function DashboardScreen({
       const isValid = await sessionApi.verifyAdmin(session.id, adminKeyInput.trim());
       if (isValid) {
         setIsAdminVerified(true);
+        if (onAdminVerify) onAdminVerify(adminKeyInput.trim());
         setAuthError("");
       } else {
         setAuthError("관리자 UUID가 일치하지 않습니다.");
@@ -128,12 +150,86 @@ export function DashboardScreen({
   const [pendingConfirm, setPendingConfirm] = useState<Recommendation | null>(null);
   const [conflict, setConflict] = useState(false);
   const [version, setVersion] = useState(0);
-  const [editOpen, setEditOpen] = useState(false);
   const [linkModalOpen, setLinkModalOpen] = useState(false);
-  const [overrideRows, setOverrideRows] = useState<
-    Array<{ time: string; removed: string; added: string }>
-  >([{ time: "", removed: "", added: "" }]);
-  const [editReason, setEditReason] = useState("");
+  
+  // Time Adjustment UI States
+  const [timeAdjustModalOpen, setTimeAdjustModalOpen] = useState(false);
+  const [editingRecRank, setEditingRecRank] = useState<number | null>(null);
+  const [editingBlocks, setEditingBlocks] = useState<any[]>([]);
+
+  // 근무자별 총 근무 시간 계산 헬퍼 함수
+  const calcTotalHours = (blocks: any[]) => {
+    const hours: Record<string, { name: string; total: number; isMandatory: boolean }> = {};
+    if (!blocks) return hours;
+    blocks.forEach((tb) => {
+      const start = new Date(tb.startTime).getTime();
+      const end = new Date(tb.endTime).getTime();
+      let diffHours = (end - start) / (1000 * 60 * 60);
+      if (diffHours < 0) diffHours += 24; // 자정 넘김 처리
+
+      const workers = tb.assignedWorkers || (tb as any).workers;
+      if (workers) {
+        workers.forEach((w: any) => {
+          if (!hours[w.id || w.name]) {
+            hours[w.id || w.name] = { name: w.name, total: 0, isMandatory: w.isMandatory };
+          }
+          hours[w.id || w.name].total += diffHours;
+        });
+      }
+    });
+    return hours;
+  };
+
+  const openTimeAdjust = (r: Recommendation) => {
+    setEditingRecRank(r.rank);
+    // 깊은 복사를 통해 로컬 상태를 초기화합니다.
+    setEditingBlocks(r.timeBlocks ? JSON.parse(JSON.stringify(r.timeBlocks)) : []);
+    setTimeAdjustModalOpen(true);
+  };
+
+  const handleTimeAdjustSubmit = () => {
+    if (editingRecRank === null) return;
+
+    // 시작 시간이 종료 시간보다 같거나 늦은 경우 차단
+    for (const block of editingBlocks) {
+      const startT = block.startTime?.split("T")[1]?.substring(0, 5);
+      const endT = block.endTime?.split("T")[1]?.substring(0, 5);
+      if (startT && endT && startT >= endT) {
+        toast.error("시작 시간이 종료 시간보다 같거나 늦을 수 없습니다.");
+        return;
+      }
+    }
+
+    setRecs((prev) =>
+      prev.map((r) => {
+        if (r.rank === editingRecRank) {
+          return {
+            ...r,
+            timeBlocks: editingBlocks,
+            isManuallyAdjusted: true,
+          };
+        }
+        return r;
+      })
+    );
+    setTimeAdjustModalOpen(false);
+    toast.success("시간이 조정되었습니다. 최종 확정하기 버튼을 눌러 저장하세요.");
+  };
+
+  const updateEditingBlockTime = (blockIdx: number, type: "start" | "end", timeStr: string) => {
+    setEditingBlocks((prev) =>
+      prev.map((tb, idx) => {
+        if (idx !== blockIdx) return tb;
+        const currentIso = type === "start" ? tb.startTime : tb.endTime;
+        const [datePart] = currentIso.split("T");
+        const newIso = `${datePart}T${timeStr}:00`;
+        return {
+          ...tb,
+          [type === "start" ? "startTime" : "endTime"]: newIso,
+        };
+      })
+    );
+  };
 
   const memberById = useMemo(
     () => new Map(session.members.map((m) => [m.memberId, m])),
@@ -145,68 +241,6 @@ export function DashboardScreen({
     return { key: d, top: f.top, bot: f.bot };
   });
 
-  const openEdit = () => {
-    if (!confirmed) return;
-    setOverrideRows([{ time: slotLabel(confirmed.start), removed: "", added: "" }]);
-    setEditReason("");
-    setEditOpen(true);
-  };
-
-  const submitEdit = () => {
-    if (!confirmed) return;
-    if (!editReason.trim()) {
-      toast.error("수정 사유를 입력해주세요. (감사 로그용)");
-      return;
-    }
-    const cleaned = overrideRows
-      .map((r) => ({ time: r.time.trim(), removed: r.removed.trim(), added: r.added.trim() }))
-      .filter((r) => r.time && (r.removed || r.added));
-    if (cleaned.length === 0) {
-      toast.error("최소 1개 이상의 슬롯 변경을 입력해주세요.");
-      return;
-    }
-
-    // apply removed/added to assignments map (member name → memberId lookup)
-    const assignments = { ...(confirmed.assignments ?? {}) };
-    for (const row of cleaned) {
-      if (row.removed) {
-        const m = session.members.find((x) => x.name === row.removed);
-        if (m) delete assignments[m.memberId];
-      }
-      if (row.added) {
-        const m = session.members.find((x) => x.name === row.added);
-        if (m) assignments[m.memberId] = "참여자";
-      }
-    }
-
-    const next: ConfirmedSlot = {
-      ...confirmed,
-      assignments,
-      description: `${fmtDateLong(confirmed.date)} ${slotLabel(confirmed.start)}~${slotLabel(confirmed.end)} (수동 보정 ${cleaned.length}건)`,
-      edits: [
-        ...(confirmed.edits ?? []),
-        {
-          at: Date.now(),
-          reason: editReason.trim(),
-          adjustedSlots: cleaned.map((r) => ({
-            time: r.time,
-            removed: r.removed || undefined,
-            added: r.added || undefined,
-          })),
-        },
-      ],
-    };
-    onConfirm(next);
-    setEditOpen(false);
-    toast.success("스케줄이 강제 수정되었습니다.");
-  };
-
-  const updateRow = (i: number, patch: Partial<{ time: string; removed: string; added: string }>) => {
-    setOverrideRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
-  };
-  const addRow = () => setOverrideRows((prev) => [...prev, { time: "", removed: "", added: "" }]);
-  const removeRow = (i: number) =>
-    setOverrideRows((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
 
   const setAssignment = (memberId: number, role: Role | "none") => {
     if (!confirmed) return;
@@ -216,16 +250,59 @@ export function DashboardScreen({
     onConfirm({ ...confirmed, assignments });
   };
 
-  const confirmedCol = confirmed ? session.dates.indexOf(confirmed.date) : -1;
+  const parseTimeBlock = (tb: any, dates: string[]) => {
+    if (!tb || !tb.startTime || !tb.endTime) return null;
+    const dStr = tb.startTime.split("T")[0];
+    const col = dates.indexOf(dStr);
+    if (col === -1) return null;
+    const sStr = tb.startTime.split("T")[1].substring(0, 5);
+    const eStr = tb.endTime.split("T")[1].substring(0, 5);
+    const timeToSlot = (t: string) => {
+      const [h, m] = t.split(":").map(Number);
+      return h * 2 + (m >= 30 ? 1 : 0);
+    };
+    return { col, start: timeToSlot(sStr), end: eStr === "00:00" ? 48 : timeToSlot(eStr) };
+  };
 
-  const attendeesAtConfirmed = confirmed
-    ? submissions.filter((s) => {
-      const day = s.slots[confirmedCol];
-      if (!day) return false;
-      for (let i = confirmed.start; i < confirmed.end; i++) if (!day[i]) return false;
-      return true;
-    })
-    : [];
+  const attendeesAtConfirmed = useMemo(() => {
+    if (!confirmed) return [];
+    
+    let hasAssignedWorkers = false;
+    const assignedIds = new Set<number>();
+    
+    if (confirmed.confirmedBlocks) {
+      for (const block of confirmed.confirmedBlocks) {
+        if (block.assignedWorkers && block.assignedWorkers.length > 0) {
+          hasAssignedWorkers = true;
+          for (const worker of block.assignedWorkers) {
+            const member = session.members.find(m => m.participantId === worker.id || m.name === worker.name);
+            if (member) {
+              assignedIds.add(member.memberId);
+            }
+          }
+        }
+      }
+    }
+    
+    if (hasAssignedWorkers) {
+      return Array.from(assignedIds).map(id => ({ memberId: id }));
+    }
+
+    return submissions.filter((s) => {
+      if (!confirmed.confirmedBlocks) return false;
+      for (const block of confirmed.confirmedBlocks) {
+        const parsed = parseTimeBlock(block, session.dates);
+        if (!parsed) continue;
+        const day = s.slots[parsed.col];
+        if (day) {
+          for (let i = parsed.start; i < parsed.end; i++) {
+            if (day[i]) return true;
+          }
+        }
+      }
+      return false;
+    });
+  }, [confirmed, submissions, session]);
 
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [isRecsLoading, setIsRecsLoading] = useState(false);
@@ -242,47 +319,75 @@ export function DashboardScreen({
     const fetchRecs = async () => {
       setIsRecsLoading(true);
       try {
-        const data = await sessionApi.getRecommendations(session.id, mandatoryIds);
-        if (!active) return;
-        
-        const timeToSlot = (t: string) => {
-          if (!t) return 0;
-          const [h, m] = t.split(":").map(Number);
-          return h * 2 + (m >= 30 ? 1 : 0);
-        };
-        
+        let mapped: Recommendation[] = [];
         const allNames = session.members.map(m => m.name);
         
-        const mapped: Recommendation[] = (data || []).map((r, i) => {
-          const kind = r.recommendationType === "MAX_ATTENDANCE" ? "attendance" :
-            r.recommendationType === "MAX_CONTINUITY" ? "continuity" : "balanced";
-          const title = r.recommendationType === "MAX_ATTENDANCE" ? "최대 참석률" :
-            r.recommendationType === "MAX_CONTINUITY" ? "최대 연속 시간" : "균등 분배";
-          const icon = r.recommendationType === "MAX_ATTENDANCE" ? "🏆" :
-            r.recommendationType === "MAX_CONTINUITY" ? "⏱️" : "⚖️";
-          const col = session.dates.indexOf(r.date);
+        if (session.domainType === "WORK") {
+          const data = await sessionApi.getWorkRecommendations(session.id);
+          if (!active) return;
           
-          const assigned = r.attendees || [];
-          const missing = allNames.filter(n => !assigned.includes(n));
-          
-          return {
-            kind,
-            recommendationType: r.recommendationType as any,
-            rank: r.rank || i + 1,
-            title,
-            icon,
-            col,
-            date: r.date,
-            start: timeToSlot(r.startTime),
-            end: timeToSlot(r.endTime),
-            attendeeCount: assigned.length,
-            totalCount: session.members.length,
-            attendanceRate: r.attendanceRate || 0,
-            assignedMembers: assigned,
-            missingMembers: missing,
-            description: `${title} 추천안입니다.`,
-          };
-        });
+          mapped = (data || []).map((r, i) => {
+            const assignedWorkerObjs = new Map<string, boolean>();
+            r.weeklyPlan.forEach(wp => {
+              wp.assignedWorkers.forEach(w => {
+                assignedWorkerObjs.set(w.name, w.isMandatory);
+              });
+            });
+            const allAssignedNames = Array.from(assignedWorkerObjs.keys());
+            const missing = allNames.filter((n: string) => !allAssignedNames.includes(n));
+            const assignedDisplay = allAssignedNames.map(name => assignedWorkerObjs.get(name) ? `${name} ★` : name);
+            
+            return {
+              kind: `work_${i}`,
+              recommendationType: "WORK" as any,
+              rank: r.rank || i + 1,
+              title: `${i + 1}순위 추천안`,
+              icon: i === 0 ? "🏆" : i === 1 ? "⏱️" : "⚖️",
+              timeBlocks: r.weeklyPlan,
+              attendeeCount: allAssignedNames.length,
+              totalCount: session.members.length,
+              attendanceRate: 100, // Hardcoded or parse r.totalCoverage
+              attendanceRateStr: r.totalCoverage,
+              assignedMembers: assignedDisplay,
+              missingMembers: missing,
+              description: "주간 근무 배정안입니다.",
+              version: r.version
+            } as Recommendation;
+          });
+        } else {
+          const data = await sessionApi.getRecommendations(session.id);
+          if (!active) return;
+
+          mapped = (data || []).map((r, i) => {
+            const kind = r.type === "MAX_ATTENDANCE" ? "attendance" :
+              r.type === "MAX_CONTINUITY" ? "continuity" : "balanced";
+            const title = r.type === "MAX_ATTENDANCE" ? "최대 참석률" :
+              r.type === "MAX_CONTINUITY" ? "최대 연속 시간" : "균등 분배";
+            const icon = r.type === "MAX_ATTENDANCE" ? "🏆" :
+              r.type === "MAX_CONTINUITY" ? "⏱️" : "⚖️";
+            
+            const startStr = `${r.date}T${r.startTime}:00`;
+            const endStr = `${r.date}T${r.endTime}:00`;
+            const missing = allNames.filter((n: string) => !(r.attendees || []).includes(n));
+            
+            return {
+              kind,
+              recommendationType: r.type as any,
+              rank: r.rank || i + 1,
+              title,
+              icon,
+              timeBlocks: [{ startTime: startStr, endTime: endStr }],
+              attendeeCount: r.attendeesCount || (r.attendees || []).length,
+              totalCount: session.members.length,
+              attendanceRate: Math.round(((r.attendeesCount || (r.attendees || []).length) / session.members.length) * 100) || 0,
+              assignedMembers: r.attendees || [],
+              missingMembers: missing,
+              description: `${r.date} ${r.startTime}에 시작하는 추천 일정입니다.`,
+              version: r.version
+            } as Recommendation;
+          });
+        }
+
         setRecs(mapped);
       } catch (err) {
         console.error("추천안을 가져오지 못했습니다.", err);
@@ -308,12 +413,6 @@ export function DashboardScreen({
     submissions.some((s) => s.slots.some((d) => d.some(Boolean)));
   const noFeasible = submissions.length > 0 && recs.length === 0;
 
-  const toggleRequired = (memberId: number) => {
-    const next = session.members.map((m) =>
-      m.memberId === memberId ? { ...m, isMandatory: !m.isMandatory } : m,
-    );
-    onUpdateMembers(next);
-  };
 
   const tryConfirm = (r: Recommendation) => {
     if (Math.random() < 0.2 && submissions.length > 1) {
@@ -323,21 +422,42 @@ export function DashboardScreen({
     }
     const assignments: Record<number, Role> = {};
     for (const s of submissions) {
-      const day = s.slots[r.col];
-      if (!day) continue;
-      let ok = true;
-      for (let i = r.start; i < r.end; i++) if (!day[i]) { ok = false; break; }
-      if (ok) assignments[s.memberId] = "참여자";
+      let canAttendAny = false;
+      if (r.timeBlocks) {
+        for (const block of r.timeBlocks) {
+          const parsed = parseTimeBlock(block, session.dates);
+          if (!parsed) continue;
+          const day = s.slots[parsed.col];
+          if (day) {
+             for (let i = parsed.start; i < parsed.end; i++) {
+                if (day[i]) { canAttendAny = true; break; }
+             }
+          }
+          if (canAttendAny) break;
+        }
+      }
+      if (canAttendAny) assignments[s.memberId] = "참여자";
     }
+
+    const blocksWithWorkers = r.timeBlocks?.map(block => {
+      let assignedWorkers: any[] = block.assignedWorkers || [];
+      if (session.domainType === "MEETING" && r.assignedMembers) {
+        assignedWorkers = r.assignedMembers.map(name => {
+          const m = session.members.find(x => x.name === name);
+          return m ? { id: m.participantId || m.memberId.toString(), name: m.name, isMandatory: m.isMandatory } : null;
+        }).filter(Boolean);
+      }
+      return { ...block, assignedWorkers };
+    });
+
     onConfirm({
-      date: r.date,
-      start: r.start,
-      end: r.end,
+      confirmedBlocks: blocksWithWorkers,
       title: r.title,
       description: r.description,
       confirmedAt: Date.now(),
       assignments,
       edits: [],
+      version: r.version,
     });
     toast.success("일정이 확정되었습니다!");
   };
@@ -405,143 +525,136 @@ export function DashboardScreen({
                 <CalendarCheck className="w-5 h-5" /> 확정된 일정
               </CardTitle>
               <CardDescription className="text-green-700/90">
-                {fmtDateLong(confirmed.date)} · {slotLabel(confirmed.start)} ~{" "}
-                {slotLabel(confirmed.end)}
-                <span className="ml-2 text-green-700/70">({confirmed.title})</span>
+                {session.domainType === "WORK" ? (
+                  <div>총 {confirmed.confirmedBlocks?.length || 0}개의 근무 구간이 확정되었습니다.</div>
+                ) : (
+                  confirmed.confirmedBlocks && confirmed.confirmedBlocks.map((tb: any, i: number) => {
+                    const dStr = tb.startTime.split("T")[0];
+                    const sStr = tb.startTime.split("T")[1].substring(0, 5);
+                    const eStr = tb.endTime.split("T")[1].substring(0, 5);
+                    return (
+                      <div key={i}>
+                        {fmtDateLong(dStr)} · {sStr} ~ {eStr === "00:00" ? "24:00" : eStr}
+                      </div>
+                    );
+                  })
+                )}
+                <div className="mt-1 text-green-700/70">({confirmed.title})</div>
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-green-800">참석자 역할 배치</h3>
-                  <span className="text-green-700/70">
-                    {attendeesAtConfirmed.length}명 참석 가능
-                  </span>
-                </div>
-                {attendeesAtConfirmed.length === 0 ? (
-                  <p className="text-green-700/70">
-                    이 시간대에 참석 가능한 팀원이 없습니다.
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {attendeesAtConfirmed.map((s) => {
-                      const m = memberById.get(s.memberId);
-                      if (!m) return null;
-                      const role = confirmed.assignments?.[s.memberId];
+              {session.domainType === "WORK" ? (
+                <div className="space-y-4">
+                  <h3 className="text-green-800 font-medium border-b border-green-200 pb-2">근무 스케줄 확정 명단</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {confirmed.confirmedBlocks?.map((tb: any, i: number) => {
+                      const dStr = tb.startTime.split("T")[0];
+                      const sStr = tb.startTime.split("T")[1].substring(0, 5);
+                      const eStr = tb.endTime.split("T")[1].substring(0, 5);
+                      const workers = tb.assignedWorkers;
                       return (
-                        <div
-                          key={s.memberId}
-                          className="flex items-center justify-between gap-3 bg-white border border-green-200 rounded-md px-3 py-2"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-gray-900 truncate">{m.name}</span>
-                            <span className="text-gray-400 text-xs">{m.role}</span>
-                            {role && (
-                              <span
-                                className={`text-[11px] px-2 py-0.5 rounded-full ${role === "발표자"
-                                  ? "bg-blue-100 text-blue-700"
-                                  : role === "진행자"
-                                    ? "bg-purple-100 text-purple-700"
-                                    : role === "기록자"
-                                      ? "bg-amber-100 text-amber-700"
-                                      : role === "옵저버"
-                                        ? "bg-gray-100 text-gray-600"
-                                        : "bg-green-100 text-green-700"
-                                  }`}
-                              >
-                                {role}
-                              </span>
-                            )}
-                            {m.isMandatory && (
-                              <Star className="w-3.5 h-3.5 fill-amber-500 stroke-amber-500 shrink-0" />
-                            )}
-                          </div>
-                          <Select
-                            value={role ?? "none"}
-                            onValueChange={(v) =>
-                              setAssignment(s.memberId, v as Role | "none")
-                            }
-                          >
-                            <SelectTrigger className="w-32 h-8 bg-white">
-                              <SelectValue placeholder="역할" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">— 미배정 —</SelectItem>
-                              {ROLES.map((r) => (
-                                <SelectItem key={r} value={r}>
-                                  {r}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                        <div key={i} className="bg-white border border-green-200 rounded-md p-3">
+                          <div className="font-medium text-gray-900">{fmtDateLong(dStr)}</div>
+                          <div className="text-gray-500 text-sm mb-2">{sStr} ~ {eStr === "00:00" ? "24:00" : eStr}</div>
+                          {workers && workers.length > 0 ? (
+                            <div className="text-blue-700 text-sm bg-blue-50 px-2 py-1.5 rounded font-medium">
+                              배정: {workers.map((w: any) => w.isMandatory ? `${w.name} ★` : w.name).join(", ")}
+                            </div>
+                          ) : (
+                            <div className="text-gray-500 text-sm">배정 인원 없음</div>
+                          )}
                         </div>
                       );
                     })}
                   </div>
-                )}
-              </div>
-
-              {confirmed.edits && confirmed.edits.length > 0 && (
+                  
+                  {session.domainType === "WORK" && confirmed.confirmedBlocks && confirmed.confirmedBlocks.length > 0 && (
+                    <div className="mt-4 pt-3 border-t border-green-200">
+                      <div className="text-xs text-green-700 font-medium mb-2">근무자별 총 주간 근무 시간</div>
+                      <div className="flex flex-wrap gap-2">
+                        {Object.values(calcTotalHours(confirmed.confirmedBlocks)).map((h, idx) => (
+                          <span key={idx} className="text-xs bg-green-50 text-green-800 px-2 py-1 rounded-md border border-green-200">
+                            {h.isMandatory ? `${h.name} ★` : h.name}: <span className="font-bold">{h.total}h</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
                 <div>
-                  <h3 className="flex items-center gap-2 text-green-800 mb-2">
-                    <History className="w-4 h-4" /> 수정 이력
-                  </h3>
-                  <ul className="space-y-1.5">
-                    {confirmed.edits
-                      .slice()
-                      .reverse()
-                      .map((e, i) => (
-                        <li
-                          key={i}
-                          className="bg-white border border-green-200 rounded-md px-3 py-2"
-                        >
-                          {e.adjustedSlots && e.adjustedSlots.length > 0 ? (
-                            <div className="space-y-0.5">
-                              {e.adjustedSlots.map((a, k) => (
-                                <div key={k} className="text-gray-700 text-sm">
-                                  <span className="font-mono">{a.time}</span>
-                                  {a.removed && (
-                                    <span className="ml-2 text-red-600">− {a.removed}</span>
-                                  )}
-                                  {a.added && (
-                                    <span className="ml-2 text-emerald-700">+ {a.added}</span>
-                                  )}
-                                </div>
-                              ))}
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-green-800">참석자 역할 배치</h3>
+                    <span className="text-green-700/70">
+                      {attendeesAtConfirmed.length}명 참석 가능
+                    </span>
+                  </div>
+                  {attendeesAtConfirmed.length === 0 ? (
+                    <p className="text-green-700/70">
+                      이 시간대에 참석 가능한 팀원이 없습니다.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {attendeesAtConfirmed.map((s) => {
+                        const m = memberById.get(s.memberId);
+                        if (!m) return null;
+                        const role = confirmed.assignments?.[s.memberId];
+                        return (
+                          <div
+                            key={s.memberId}
+                            className="flex items-center justify-between gap-3 bg-white border border-green-200 rounded-md px-3 py-2"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-gray-900 truncate">{m.name}</span>
+                              <span className="text-gray-400 text-xs">{m.role}</span>
+                              {role && (
+                                <span
+                                  className={`text-[11px] px-2 py-0.5 rounded-full ${role === "발표자"
+                                    ? "bg-blue-100 text-blue-700"
+                                    : role === "진행자"
+                                      ? "bg-purple-100 text-purple-700"
+                                      : role === "기록자"
+                                        ? "bg-amber-100 text-amber-700"
+                                        : role === "옵저버"
+                                          ? "bg-gray-100 text-gray-600"
+                                          : "bg-green-100 text-green-700"
+                                    }`}
+                                >
+                                  {role}
+                                </span>
+                              )}
+                              {m.isMandatory && (
+                                <Star className="w-3.5 h-3.5 fill-amber-500 stroke-amber-500 shrink-0" />
+                              )}
                             </div>
-                          ) : e.from && e.to ? (
-                            <div className="text-gray-700">
-                              {e.from.date} {slotLabel(e.from.start)}~{slotLabel(e.from.end)}
-                              <span className="mx-2 text-gray-400">→</span>
-                              {e.to.date} {slotLabel(e.to.start)}~{slotLabel(e.to.end)}
-                            </div>
-                          ) : null}
-                          <div className="text-gray-500 mt-1 text-sm">사유: {e.reason}</div>
-                        </li>
-                      ))}
-                  </ul>
+                            <Select
+                              value={role ?? "none"}
+                              onValueChange={(v) =>
+                                setAssignment(s.memberId, v as Role | "none")
+                              }
+                            >
+                              <SelectTrigger className="w-32 h-8 bg-white">
+                                <SelectValue placeholder="역할" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">— 미배정 —</SelectItem>
+                                {ROLES.map((r) => (
+                                  <SelectItem key={r} value={r}>
+                                    {r}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  className="border-green-300 text-green-700 hover:bg-green-100"
-                  onClick={openEdit}
-                >
-                  <Pencil className="w-4 h-4" /> 일정 수동 수정
-                </Button>
-                <Button
-                  variant="outline"
-                  className="border-green-300 text-green-700 hover:bg-green-100"
-                  onClick={() => {
-                    onConfirm(null);
-                    toast.info("확정을 취소했습니다.");
-                  }}
-                >
-                  확정 취소
-                </Button>
-              </div>
+
+
             </CardContent>
             <div className="border-t border-green-200 bg-green-50/50 p-4 flex justify-end">
                 <Button 
@@ -584,13 +697,7 @@ export function DashboardScreen({
                         </span>
                       )}
                     </div>
-                    <label className="flex items-center gap-2 text-gray-600">
-                      필참
-                      <Switch
-                        checked={m.isMandatory}
-                        onCheckedChange={() => toggleRequired(m.memberId)}
-                      />
-                    </label>
+
                   </div>
                 );
               })}
@@ -637,11 +744,13 @@ export function DashboardScreen({
                       ? "bg-slate-100 text-slate-700 border-slate-300"
                       : "bg-orange-50 text-orange-700 border-orange-200";
                 const typeLabel =
-                  r.recommendationType === "MAX_ATTENDANCE"
-                    ? "최대 인원 참석"
-                    : r.recommendationType === "MAX_CONTINUITY"
-                      ? "최대 연속 시간"
-                      : "균등 분배";
+                  session.domainType === "WORK"
+                    ? `근무 스케줄`
+                    : r.recommendationType === "MAX_ATTENDANCE"
+                      ? "최대 인원 참석"
+                      : r.recommendationType === "MAX_CONTINUITY"
+                        ? "최대 연속 시간"
+                        : "균등 분배";
                 return (
                   <Card
                     key={r.kind}
@@ -660,23 +769,62 @@ export function DashboardScreen({
                       </div>
                       <CardTitle className="flex items-center gap-2">
                         <span className="text-2xl">{r.icon}</span>
-                        {r.title}
+                        <div className="flex flex-col">
+                          <span>{r.title}</span>
+                          {(r as any).isManuallyAdjusted && (
+                            <span className="inline-block mt-0.5 text-[11px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-normal w-max">
+                              (시간 조정됨)
+                            </span>
+                          )}
+                        </div>
                       </CardTitle>
                       <CardDescription>{r.description}</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                      <div className="text-sm text-gray-700">
-                        <div className="font-medium text-gray-900">{fmtDateLong(r.date)}</div>
-                        <div className="text-gray-500">
-                          {slotLabel(r.start)} ~ {slotLabel(r.end)}
-                        </div>
+                      <div className="text-sm text-gray-700 max-h-32 overflow-y-auto">
+                        {r.timeBlocks && r.timeBlocks.map((tb, idx) => {
+                          const dStr = tb.startTime.split("T")[0];
+                          const sStr = tb.startTime.split("T")[1].substring(0, 5);
+                          const eStr = tb.endTime.split("T")[1].substring(0, 5);
+                          const workers = "assignedWorkers" in tb ? (tb as any).assignedWorkers : null;
+                          return (
+                            <div key={idx} className="mb-2 last:mb-0">
+                              <div className="font-medium text-gray-900">{fmtDateLong(dStr)}</div>
+                              <div className="text-gray-500">
+                                {sStr} ~ {eStr === "00:00" ? "24:00" : eStr}
+                              </div>
+                              {workers && (
+                                <div className="text-xs text-blue-600 mt-0.5 font-medium">
+                                  배정: {workers.map((w: any) => w.isMandatory ? `${w.name} ★` : w.name).join(", ")}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
+                      
+                      {session.domainType === "WORK" && r.timeBlocks && (
+                        <div className="mt-2 pt-2 border-t border-gray-100">
+                          <div className="text-[11px] text-gray-500 mb-1">근무자별 예상 근무 시간</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {Object.values(calcTotalHours(r.timeBlocks)).map((h, idx) => (
+                              <span key={idx} className="text-[11px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-100">
+                                {h.name}: <span className="font-bold">{h.total}h</span>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       <div>
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs text-gray-500">참석률</span>
+                          <span className="text-xs text-gray-500">
+                            {session.domainType === "WORK" ? "충족률" : "참석률"}
+                          </span>
                           <span className="text-xs text-gray-900">
-                            {r.attendanceRate}% ({r.attendeeCount}/{r.totalCount}명)
+                            {session.domainType === "WORK"
+                              ? (r.attendanceRateStr || `${r.attendanceRate}%`)
+                              : `${r.attendanceRate}% (${r.attendeeCount}/${r.totalCount}명)`}
                           </span>
                         </div>
                         <Progress value={r.attendanceRate} />
@@ -713,15 +861,27 @@ export function DashboardScreen({
                         </div>
                       )}
 
-                      <Button
-                        className="w-full mt-2 bg-blue-600 hover:bg-blue-700"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          tryConfirm(r);
-                        }}
-                      >
-                        이 스케줄로 최종 확정하기
-                      </Button>
+                      <div className="pt-2 flex flex-col gap-2">
+                        <Button
+                          variant="outline"
+                          className="w-full border-blue-200 text-blue-700 hover:bg-blue-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openTimeAdjust(r);
+                          }}
+                        >
+                          시간 미세 조정
+                        </Button>
+                        <Button
+                          className="w-full bg-blue-600 hover:bg-blue-700"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            tryConfirm(r);
+                          }}
+                        >
+                          이 스케줄로 최종 확정하기
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 );
@@ -739,18 +899,14 @@ export function DashboardScreen({
                 <HeatmapGrid
                   columns={columns}
                   submissions={submissions}
-                  highlight={
-                    selected
-                      ? { col: selected.col, start: selected.start, end: selected.end }
+                  highlights={
+                    selected?.timeBlocks
+                      ? selected.timeBlocks.map(tb => parseTimeBlock(tb, session.dates)).filter((x): x is {col:number, start:number, end:number} => x !== null)
                       : null
                   }
-                  confirmed={
-                    confirmed && confirmedCol >= 0
-                      ? {
-                        col: confirmedCol,
-                        start: confirmed.start,
-                        end: confirmed.end,
-                      }
+                  confirmedList={
+                    confirmed?.confirmedBlocks
+                      ? confirmed.confirmedBlocks.map(tb => parseTimeBlock(tb, session.dates)).filter((x): x is {col:number, start:number, end:number} => x !== null)
                       : null
                   }
                 />
@@ -787,117 +943,61 @@ export function DashboardScreen({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+      <Dialog open={timeAdjustModalOpen} onOpenChange={setTimeAdjustModalOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-700">
-              <AlertTriangle className="w-5 h-5" /> 스케줄 수동 보정 (Manual Override)
+            <DialogTitle className="flex items-center gap-2 text-blue-700">
+              <Clock className="w-5 h-5" /> 시간 미세 조정 (Time Adjustment)
             </DialogTitle>
             <DialogDescription>
-              확정된 일정에서 특정 타임 슬롯의 참석자를 강제로 교체합니다. 모든 변경은 감사 로그에 기록됩니다.
+              {session.domainType === "WORK" 
+                ? "주간 근무표(Weekly Plan)에 포함된 여러 근무 슬롯들의 시간을 각각 개별적으로 30분 단위 조절할 수 있습니다."
+                : "추천된 단일 회의 스케줄의 시간을 앞뒤로 30분 단위로 미세 조정합니다."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>변경할 타임 슬롯</Label>
-                <Button type="button" variant="outline" size="sm" onClick={addRow}>
-                  슬롯 추가
-                </Button>
-              </div>
-              <div className="space-y-2">
-                {overrideRows.map((row, i) => (
-                  <div
-                    key={i}
-                    className="grid grid-cols-[110px_1fr_1fr_auto] gap-2 items-center border border-gray-200 rounded-md p-2 bg-gray-50/50"
-                  >
-                    <Select
-                      value={row.time}
-                      onValueChange={(v) => updateRow(i, { time: v })}
-                    >
-                      <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="시간" />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-64">
-                        {confirmed &&
-                          Array.from({ length: confirmed.end - confirmed.start }).map((_, k) => {
-                            const slot = confirmed.start + k;
-                            return (
-                              <SelectItem key={slot} value={slotLabel(slot)}>
-                                {slotLabel(slot)}
-                              </SelectItem>
-                            );
-                          })}
-                      </SelectContent>
-                    </Select>
-                    <Select
-                      value={row.removed || "_none"}
-                      onValueChange={(v) => updateRow(i, { removed: v === "_none" ? "" : v })}
-                    >
-                      <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="제외할 팀원" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="_none">— 없음 —</SelectItem>
-                        {session.members.map((m) => (
-                          <SelectItem key={m.memberId} value={m.name}>
-                            {m.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select
-                      value={row.added || "_none"}
-                      onValueChange={(v) => updateRow(i, { added: v === "_none" ? "" : v })}
-                    >
-                      <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="대체 투입할 팀원" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="_none">— 없음 —</SelectItem>
-                        {session.members.map((m) => (
-                          <SelectItem key={m.memberId} value={m.name}>
-                            {m.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <button
-                      type="button"
-                      onClick={() => removeRow(i)}
-                      className="p-1.5 text-gray-400 hover:text-red-600"
-                      aria-label="행 삭제"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <p className="text-xs text-gray-500">
-                시간(time), 제외할 팀원(removed), 대체 투입할 팀원(added) — 각 행은 둘 중 최소 하나는 채워야 합니다.
-              </p>
-            </div>
+            <p className="text-red-600 font-medium text-sm">
+              ⚠️ 시간을 임의로 변경할 경우, 기존 배정 인원의 실제 가용 시간과 불일치할 수 있습니다.
+            </p>
+            <div className="space-y-3">
+              {editingBlocks.map((block, i) => {
+                const sStr = block.startTime.split("T")[1].substring(0, 5);
+                const eStr = block.endTime.split("T")[1].substring(0, 5);
+                const dStr = block.startTime.split("T")[0];
+                
+                const timeOptions = [];
+                for (let h = 0; h < 24; h++) {
+                  const hh = h.toString().padStart(2, "0");
+                  timeOptions.push(`${hh}:00`);
+                  timeOptions.push(`${hh}:30`);
+                }
+                timeOptions.push("24:00");
 
-            <div className="space-y-2">
-              <Label htmlFor="reason">
-                수정 사유 <span className="text-red-500">*</span>{" "}
-                <span className="text-xs text-gray-500">(감사 로그 저장용)</span>
-              </Label>
-              <Textarea
-                id="reason"
-                placeholder="예: 강은우 병가로 인한 당일 긴급 교체 투입"
-                value={editReason}
-                onChange={(e) => setEditReason(e.target.value)}
-                rows={3}
-              />
+                return (
+                  <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-md">
+                    <div className="font-medium min-w-[100px]">{dStr}</div>
+                    <Select value={sStr} onValueChange={(v) => updateEditingBlockTime(i, "start", v)}>
+                      <SelectTrigger className="w-[120px] bg-white"><SelectValue /></SelectTrigger>
+                      <SelectContent className="max-h-64">
+                        {timeOptions.slice(0, -1).map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <span className="text-gray-500">~</span>
+                    <Select value={eStr === "00:00" ? "24:00" : eStr} onValueChange={(v) => updateEditingBlockTime(i, "end", v === "24:00" ? "00:00" : v)}>
+                      <SelectTrigger className="w-[120px] bg-white"><SelectValue /></SelectTrigger>
+                      <SelectContent className="max-h-64">
+                        {timeOptions.slice(1).map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                );
+              })}
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)}>
-              취소
-            </Button>
-            <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={submitEdit}>
-              강제 수정 적용
+            <Button variant="outline" onClick={() => setTimeAdjustModalOpen(false)}>취소</Button>
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleTimeAdjustSubmit}>
+              적용
             </Button>
           </DialogFooter>
         </DialogContent>
