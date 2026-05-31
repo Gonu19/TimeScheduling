@@ -14,11 +14,8 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.Convert;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
-import com.example.timescheduling.dto.TimeBlock;
 
 @Entity
 @Table(name = "session")
@@ -51,22 +48,33 @@ public class Session {
     @Builder.Default
     private SessionStatus status = SessionStatus.OPEN;
 
-    @Convert(converter = TimeBlockListConverter.class)
-    @Column(name = "confirmed_blocks", columnDefinition = "TEXT")
-    private List<TimeBlock> confirmedBlocks;
+    @Column(name = "confirmed_date")
+    private LocalDate confirmedDate;
+
+    @Column(name = "start_time", length = 5)
+    private String startTime;
+
+    @Column(name = "end_time", length = 5)
+    private String endTime;
 
     @Column(name = "admin_token", length = 36)
     private String adminToken;
 
-    @Column(name = "requirements_json", columnDefinition = "TEXT")
-    private String requirementsJson;
+    @Column(name = "override_reason", length = 255)
+    private String overrideReason;
 
-    public void confirmSchedule(List<TimeBlock> confirmedBlocks) {
+    @Column(name = "adjusted_slots", columnDefinition = "TEXT")
+    private String adjustedSlotsJson;
+
+    public void confirmSchedule(LocalDate confirmedDate, String startTime, String endTime) {
         this.status = SessionStatus.CONFIRMED;
-        this.confirmedBlocks = confirmedBlocks;
+        this.confirmedDate = confirmedDate;
+        this.startTime = startTime;
+        this.endTime = endTime;
     }
 
-    public void updateRequirements(String requirementsJson) {
-        this.requirementsJson = requirementsJson;
+    public void applyManualOverride(String overrideReason, String adjustedSlotsJson) {
+        this.overrideReason = overrideReason;
+        this.adjustedSlotsJson = adjustedSlotsJson;
     }
 }

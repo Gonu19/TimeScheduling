@@ -13,10 +13,6 @@
 | **purpose**    | `VARCHAR(20)`  | NOT NULL      | 세션의 목적입니다. 알고리즘 엔진이 연산 기준을 판단할 수 있도록 '회의(MEETING)' 또는 '근무(WORK)' 값을 가집니다.                                                                                                |
 | **start_date** | `DATE`         | NOT NULL      | **[변경됨]** 조율의 기준이 되는 **'시작 날짜(Start Date)'**입니다. 백엔드는 이 날짜를 기준으로 자동으로 향후 7일(Start Date + 6일)의 기간을 계산하여 가용시간 비트마스크 배열과 1:1 매핑(Mapping)합니다. 방장의 인지 부하를 줄이고 데이터 구조를 최적화합니다. |
 | **created_at** | `DATETIME`     | DEFAULT NOW() | 방이 개설된 시간입니다. DB 내부의 Event Scheduler가 이 시간을 기준으로 7일이 지난 만료 세션을 추적하여 자율 삭제(Purge)합니다.                                                                                     |
-| **status** | `VARCHAR(20)`     | NOT NULL, DEFAULT 'OPEN' | 세션의 현재 상태입니다. 'OPEN'(조율 중), 'CONFIRMED'(확정 완료) 등의 값을 가지며 프론트엔드의 화면 렌더링 및 입력 가능 여부를 제어합니다. |
-| **confirmed_blocks** | `TEXT`     | Nullable | 방장이 스케줄을 최종 확정(CONFIRMED)했을 때, 해당 스케줄 결과 데이터 배열(TimeBlock 리스트)이 JSON 형태로 직렬화되어 저장됩니다. |
-| **admin_token** | `VARCHAR(36)`     | Nullable | 세션 생성 시 방장에게만 발급되는 고유 관리자 권한 인증용 토큰입니다. |
-| **requirements_json** | `TEXT`     | Nullable | **[근무 요건 데이터]** WORK 도메인인 경우, 각 요일별 필요 인력 및 근무 시간 조건 등이 JSON 포맷으로 저장됩니다. 추천 알고리즘 엔진이 이 값을 읽어들여 최적의 근무표를 도출합니다. |
 
 ## 2. participant (참가자 정보 테이블)
 

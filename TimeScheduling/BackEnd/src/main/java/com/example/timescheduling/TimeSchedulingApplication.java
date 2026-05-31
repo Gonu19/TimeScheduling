@@ -11,4 +11,5 @@ public class TimeSchedulingApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(TimeSchedulingApplication.class, args);
 	}
+
 }

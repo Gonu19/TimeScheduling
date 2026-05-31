@@ -6,7 +6,6 @@ import {
   type Member,
   type Submission,
 } from "../types";
-import { type TimeBlock, type WorkShiftBlock } from "../../api/sessionApi";
 
 export type RecommendationType =
   | "MAX_ATTENDANCE"
@@ -14,20 +13,21 @@ export type RecommendationType =
   | "MAX_CONTINUITY";
 
 export type Recommendation = {
-  kind: "attendance" | "balanced" | "continuity" | string;
+  kind: "attendance" | "balanced" | "continuity";
   recommendationType: RecommendationType;
   rank: number; // 1~3
   title: string;
   icon: string;
-  timeBlocks: (TimeBlock | WorkShiftBlock)[];
+  col: number; // index into session.dates
+  date: string;
+  start: number;
+  end: number;
   attendeeCount: number;
   totalCount: number;
   attendanceRate: number; // %
-  attendanceRateStr?: string; // string formatted by backend (e.g. "100%")
   assignedMembers: string[];
   missingMembers: string[];
   description: string;
-  version?: number;
 };
 
 function fmtCol(date: string) {
@@ -119,10 +119,10 @@ export function computeRecommendations(
       recommendationType: "MAX_ATTENDANCE",
       icon: "🏆",
       title: "최대 참석률",
-      timeBlocks: [{
-        startTime: `${dates[best.col]}T${slotLabel(best.slot)}:00`,
-        endTime: `${dates[best.col]}T${slotLabel(best.slot + 1)}:00`
-      }],
+      col: best.col,
+      date: dates[best.col],
+      start: best.slot,
+      end: best.slot + 1,
       attendeeCount: best.n,
       totalCount: total,
       attendanceRate: Math.round((best.n / total) * 100),
@@ -173,10 +173,10 @@ export function computeRecommendations(
       recommendationType: "MAX_CONTINUITY",
       icon: "⏱️",
       title: "최대 연속 시간",
-      timeBlocks: [{
-        startTime: `${dates[cont.col]}T${slotLabel(cont.start)}:00`,
-        endTime: `${dates[cont.col]}T${slotLabel(cont.end)}:00`
-      }],
+      col: cont.col,
+      date: dates[cont.col],
+      start: cont.start,
+      end: cont.end,
       attendeeCount: cont.n,
       totalCount: total,
       attendanceRate: Math.round((cont.n / total) * 100),
@@ -211,10 +211,10 @@ export function computeRecommendations(
         recommendationType: "EQUAL_DISTRIBUTION",
         icon: "⚖️",
         title: "균등 분배",
-        timeBlocks: [{
-          startTime: `${dates[bal.col]}T${slotLabel(bal.slot)}:00`,
-          endTime: `${dates[bal.col]}T${slotLabel(bal.slot + 1)}:00`
-        }],
+        col: bal.col,
+        date: dates[bal.col],
+        start: bal.slot,
+        end: bal.slot + 1,
         attendeeCount: bal.n,
         totalCount: total,
         attendanceRate: Math.round((bal.n / total) * 100),

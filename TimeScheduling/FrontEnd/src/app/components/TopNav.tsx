@@ -7,9 +7,10 @@ type Props = {
   sessionName?: string;
   canGoApp: boolean;
   onNavigate: (v: View) => void;
+  onLoadDemo: () => void;
 };
 
-export function TopNav({ view, sessionName, canGoApp, onNavigate }: Props) {
+export function TopNav({ view, sessionName, canGoApp, onNavigate, onLoadDemo }: Props) {
   const item = (active: boolean) =>
     `px-3 py-1.5 rounded-md transition ${
       active
@@ -60,6 +61,12 @@ export function TopNav({ view, sessionName, canGoApp, onNavigate }: Props) {
               현재 세션: <span className="text-gray-800">{sessionName}</span>
             </span>
           )}
+          <button
+            onClick={onLoadDemo}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-200 bg-white hover:bg-gray-50 text-gray-700"
+          >
+            <Sparkles className="w-4 h-4 text-amber-500" /> 데모 데이터
+          </button>
         </div>
       </div>
     </header>

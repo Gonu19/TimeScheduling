@@ -1,9 +1,9 @@
 package com.example.timescheduling.dto;
 
-import java.util.List;
+import java.time.LocalDate;
 
 public record ConfirmScheduleRequest(
-    List<TimeBlock> confirmedBlocks,
-    Integer version,
-    java.util.Map<Long, String> assignments
+    LocalDate date,
+    String startTime,
+    String endTime
 ) {}

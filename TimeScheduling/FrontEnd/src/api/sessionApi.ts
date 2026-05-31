@@ -11,9 +11,8 @@ export interface MemberCreateRequest {
 export interface SessionCreateRequest {
   title: string;
   domainType: string;
-  startDate: string;
+  candidateDates: string[];
   members: MemberCreateRequest[];
-  requirementsJson?: string;
 }
 
 export interface SessionCreateResponse {
@@ -24,7 +23,6 @@ export interface SessionCreateResponse {
 
 export interface MemberInfo {
   memberId: number;
-  participantId?: string;
   name: string;
   role: string;
   isMandatory: boolean;
@@ -38,61 +36,30 @@ export interface SessionInfoResponse {
   status: "OPEN" | "CONFIRMED";
   candidateDates: string[];
   members: MemberInfo[];
-  requirementsJson?: string;
-}
-
-export interface TimeBlock {
-  startTime: string; // ISO 8601 string
-  endTime: string;   // ISO 8601 string
-  assignedWorkers?: AssigneeDto[];
-}
-
-export interface ConfirmedScheduleResponse {
-  sessionId: string;
-  title: string;
-  confirmedBlocks: TimeBlock[];
-  version: number;
 }
 
 export interface RecommendationResponse {
   rank: number;
-  type: string;
+  recommendationType: string;
   date: string;
   startTime: string;
   endTime: string;
-  attendeesCount: number;
+  attendanceRate: number;
   attendees: string[];
-  version: number;
-}
-
-export interface AssigneeDto {
-  id: string;
-  name: string;
-  isMandatory: boolean;
-}
-
-export interface WorkShiftBlock {
-  startTime: string; // ISO 8601 string
-  endTime: string;   // ISO 8601 string
-  assignedWorkers: AssigneeDto[];
-}
-
-export interface WorkRecommendationResponse {
-  rank: number;
-  totalCoverage: string;
-  weeklyPlan: WorkShiftBlock[];
-  version: number;
 }
 
 export interface ConfirmScheduleRequest {
-  confirmedBlocks: TimeBlock[];
-  version: number;
-  assignments?: Record<number, string>;
+  date: string;
+  startSlot: number;
+  endSlot: number;
+  assignments: Record<number, string>;
 }
 
 export interface ConfirmScheduleResponse {
   sessionId: string;
-  status: string;
+  confirmedDate: string;
+  startSlot: number;
+  endSlot: number;
 }
 
 export interface UpdateAvailabilityRequest {
@@ -103,27 +70,6 @@ export interface UpdateAvailabilityResponse {
   memberId: number;
   updatedAt: string;
 }
-
-export interface ShiftRequirementData {
-  day_0: number[];
-  day_1: number[];
-  day_2: number[];
-  day_3: number[];
-  day_4: number[];
-  day_5: number[];
-  day_6: number[];
-}
-
-export interface RegisterShiftRequirementRequest {
-  requirementData: ShiftRequirementData;
-}
-
-export interface RegisterShiftRequirementResponse {
-  success: boolean;
-  message: string;
-}
-
-
 
 // API Functions
 export const sessionApi = {
@@ -158,13 +104,9 @@ export const sessionApi = {
     return res.data;
   },
 
-  getRecommendations: async (sessionId: string) => {
-    const res = await apiClient.get<RecommendationResponse[]>(`/api/sessions/${sessionId}/recommendations`);
-    return res.data;
-  },
-
-  getWorkRecommendations: async (sessionId: string) => {
-    const res = await apiClient.get<WorkRecommendationResponse[]>(`/api/sessions/${sessionId}/work-recommendations`);
+  getRecommendations: async (sessionId: string, mandatoryIds?: number[]) => {
+    const params = mandatoryIds && mandatoryIds.length > 0 ? { mandatoryIds: mandatoryIds.join(",") } : {};
+    const res = await apiClient.get<RecommendationResponse[]>(`/api/sessions/${sessionId}/recommendations`, { params });
     return res.data;
   },
 
@@ -172,28 +114,4 @@ export const sessionApi = {
     const res = await apiClient.post<ConfirmScheduleResponse>(`/api/sessions/${sessionId}/confirm`, data);
     return res.data;
   },
-
-  getConfirmedSchedule: async (sessionId: string): Promise<ConfirmedScheduleResponse> => {
-    const res = await apiClient.get<ConfirmedScheduleResponse>(`/api/sessions/${sessionId}/result`);
-    return res.data;
-  },
-
-  registerShiftRequirements: async (
-    sessionId: string,
-    adminToken: string,
-    data: RegisterShiftRequirementRequest
-  ): Promise<RegisterShiftRequirementResponse> => {
-    const res = await apiClient.put<RegisterShiftRequirementResponse>(
-      `/api/sessions/${sessionId}/requirements`,
-      data,
-      {
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-        },
-      }
-    );
-    return res.data;
-  },
-
-
 };

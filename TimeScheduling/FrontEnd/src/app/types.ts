@@ -1,10 +1,8 @@
 export type DomainType = "MEETING" | "WORK";
 export type SessionStatus = "OPEN" | "CONFIRMED";
-import { type TimeBlock } from "../api/sessionApi";
 
 export type Member = {
   memberId: number;
-  participantId?: string;
   name: string;
   role: string;
   isMandatory: boolean;
@@ -21,7 +19,6 @@ export type Session = {
   dates: string[]; // candidate ISO dates (YYYY-MM-DD), columns in the grid
   createdAt: number;
   expiresAt?: number;
-  requirementsJson?: string;
 };
 
 // 0 = Monday ... 6 = Sunday (matches API bitmask index)
@@ -64,13 +61,14 @@ export type EditRecord = {
 };
 
 export type ConfirmedSlot = {
-  confirmedBlocks: TimeBlock[];
+  date: string; // ISO date string
+  start: number;
+  end: number;
   title: string;
   description: string;
   confirmedAt: number;
   assignments?: Record<number, Role>; // memberId -> role
   edits?: EditRecord[];
-  version?: number;
 };
 
 export type RecentSession = {

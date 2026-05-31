@@ -42,17 +42,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Integration Test Session\",\n  \"domainType\": \"MEETING\",\n  \"members\": [\n    {\n      \"name\": \"Member Alpha\",\n      \"role\": \"Leader\",\n      \"isMandatory\": true\n    },\n    {\n      \"name\": \"Member Beta\",\n      \"role\": \"Developer\",\n      \"isMandatory\": true\n    },\n    {\n      \"name\": \"Member Gamma\",\n      \"role\": \"Designer\",\n      \"isMandatory\": false\n    }\n  ],\n  \"startDate\": \"2026-06-10\"\n}"
+              "raw": "{\n  \"title\": \"Integration Test Session\",\n  \"domainType\": \"MEETING\",\n  \"candidateDates\": [\"2026-06-01\", \"2026-06-02\", \"2026-06-03\", \"2026-06-04\", \"2026-06-05\", \"2026-06-06\", \"2026-06-07\"],\n  \"members\": [\n    {\n      \"name\": \"Member Alpha\",\n      \"role\": \"Leader\",\n      \"isMandatory\": true\n    },\n    {\n      \"name\": \"Member Beta\",\n      \"role\": \"Developer\",\n      \"isMandatory\": true\n    },\n    {\n      \"name\": \"Member Gamma\",\n      \"role\": \"Designer\",\n      \"isMandatory\": false\n    }\n  ]\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/sessions",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "sessions"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions"]
             }
           }
         },
@@ -90,15 +85,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/verify-admin",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "sessions",
-                "{{sessionId}}",
-                "verify-admin"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "verify-admin"]
             }
           }
         },
@@ -129,14 +117,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/sessions/{{sessionId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "sessions",
-                "{{sessionId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}"]
             }
           }
         },
@@ -170,17 +152,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/members/{{memberId1}}/availabilities",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "sessions",
-                "{{sessionId}}",
-                "members",
-                "{{memberId1}}",
-                "availabilities"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "members", "{{memberId1}}", "availabilities"]
             }
           }
         },
@@ -214,17 +187,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/members/{{memberId2}}/availabilities",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "sessions",
-                "{{sessionId}}",
-                "members",
-                "{{memberId2}}",
-                "availabilities"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "members", "{{memberId2}}", "availabilities"]
             }
           }
         },
@@ -253,17 +217,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/members/{{memberId1}}/availabilities",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "sessions",
-                "{{sessionId}}",
-                "members",
-                "{{memberId1}}",
-                "availabilities"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "members", "{{memberId1}}", "availabilities"]
             }
           }
         },
@@ -297,15 +252,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/recommendations?mandatoryIds={{memberId1}},{{memberId2}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "sessions",
-                "{{sessionId}}",
-                "recommendations"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "recommendations"],
               "query": [
                 {
                   "key": "mandatoryIds",
@@ -341,19 +289,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"confirmedBlocks\": [\n    {\n      \"startTime\": \"2026-06-10T09:00:00\",\n      \"endTime\": \"2026-06-10T10:00:00\",\n      \"assignedWorkers\": []\n    }\n  ],\n  \"version\": 1\n}"
+              "raw": "{\n  \"date\": \"{{recommendedDate}}\",\n  \"startTime\": \"{{recommendedStart}}\",\n  \"endTime\": \"{{recommendedEnd}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/confirm",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "sessions",
-                "{{sessionId}}",
-                "confirm"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "confirm"]
             }
           }
         },
@@ -364,13 +305,13 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('Status code is 200 OK', function () {",
+                  "pm.test(\"Status code is 200 OK\", function () {",
                   "    pm.response.to.have.status(200);",
                   "});",
-                  "pm.test('Result contains confirmed blocks', function () {",
+                  "pm.test(\"Result matches confirmed schedule\", function () {",
                   "    const jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.sessionId).to.eql(pm.collectionVariables.get('sessionId'));",
-                  "    pm.expect(jsonData.confirmedBlocks).to.be.an('array').that.is.not.empty;",
+                  "    pm.expect(jsonData.sessionId).to.eql(pm.collectionVariables.get(\"sessionId\"));",
+                  "    pm.expect(jsonData.confirmedDate).to.eql(pm.collectionVariables.get(\"recommendedDate\"));",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -382,15 +323,52 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/result",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "sessions",
-                "{{sessionId}}",
-                "result"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "result"]
+            }
+          }
+        },
+        {
+          "name": "4.2 Manual Override (Schedule Edit)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Response status is UPDATED\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"UPDATED\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"adjustedSlots\": [\n    {\n      \"time\": \"14:00\",\n      \"removed\": \"Member Alpha\",\n      \"added\": \"Member Beta\"\n    }\n  ],\n  \"overrideReason\": \"강은우 병가로 인한 당일 긴급 교체 투입\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/result",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "result"]
             }
           }
         }
@@ -433,15 +411,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/verify-admin",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "sessions",
-                "{{sessionId}}",
-                "verify-admin"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "verify-admin"]
             }
           }
         },
@@ -475,17 +446,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/members/{{memberId1}}/availabilities",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "sessions",
-                "{{sessionId}}",
-                "members",
-                "{{memberId1}}",
-                "availabilities"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "members", "{{memberId1}}", "availabilities"]
             }
           }
         },
@@ -509,418 +471,89 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/members/999999/availabilities",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "sessions",
-                "{{sessionId}}",
-                "members",
-                "999999",
-                "availabilities"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "members", "999999", "availabilities"]
             }
           }
         },
         {
-          "name": "Create Session - Invalid Domain",
+          "name": "Manual Override - Missing Authorization Header",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 401 Unauthorized\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
-            "method": "POST",
+            "method": "PATCH",
             "header": [
               {
                 "key": "Content-Type",
-                "value": "application/json"
+                "value": "application/json",
+                "type": "text"
               }
             ],
-            "url": {
-              "raw": "http://localhost:8080/api/sessions",
-              "protocol": "http",
-              "host": [
-                "localhost"
-              ],
-              "port": "8080",
-              "path": [
-                "api",
-                "sessions"
-              ]
-            },
             "body": {
               "mode": "raw",
-              "raw": "{\"title\":\"Test\",\"domainType\":\"PARTY\",\"startDate\":\"2026-06-10\",\"members\":[{\"name\":\"A\",\"role\":\"B\",\"isMandatory\":true}]}"
+              "raw": "{\n  \"adjustedSlots\": [\n    {\n      \"time\": \"14:00\",\n      \"removed\": \"Member Alpha\",\n      \"added\": \"Member Beta\"\n    }\n  ],\n  \"overrideReason\": \"긴급 수정\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/result",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "result"]
             }
-          },
+          }
+        },
+        {
+          "name": "Manual Override - Missing Reason",
           "event": [
             {
               "listen": "test",
               "script": {
-                "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status code is 400 Bad Request', function () { pm.response.to.have.status(400); });"
-                ]
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Returns ERR_REASON_REQUIRED error\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.errorCode).to.eql(\"ERR_REASON_REQUIRED\");",
+                  "});"
+                ],
+                "type": "text/javascript"
               }
             }
-          ]
-        },
-        {
-          "name": "Create Session - Missing Title",
+          ],
           "request": {
-            "method": "POST",
+            "method": "PATCH",
             "header": [
               {
                 "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "http://localhost:8080/api/sessions",
-              "protocol": "http",
-              "host": [
-                "localhost"
-              ],
-              "port": "8080",
-              "path": [
-                "api",
-                "sessions"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\"title\":\"\",\"domainType\":\"MEETING\",\"startDate\":\"2026-06-10\",\"members\":[{\"name\":\"A\",\"role\":\"B\",\"isMandatory\":true}]}"
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status code is 400 Bad Request', function () { pm.response.to.have.status(400); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Get Session - Not Found",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "http://localhost:8080/api/sessions/00000000-0000-0000-0000-000000000000",
-              "protocol": "http",
-              "host": [
-                "localhost"
-              ],
-              "port": "8080",
-              "path": [
-                "api",
-                "sessions",
-                "00000000-0000-0000-0000-000000000000"
-              ]
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status code is 404 Not Found', function () { pm.response.to.have.status(404); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Confirm Schedule - Invalid Version Conflict",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
+                "value": "application/json",
+                "type": "text"
               },
               {
                 "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
               }
             ],
-            "url": {
-              "raw": "http://localhost:8080/api/sessions/{{sessionId}}/confirm",
-              "protocol": "http",
-              "host": [
-                "localhost"
-              ],
-              "port": "8080",
-              "path": [
-                "api",
-                "sessions",
-                "{{sessionId}}",
-                "confirm"
-              ]
-            },
             "body": {
               "mode": "raw",
-              "raw": "{\"confirmedBlocks\":[{\"startTime\":\"2026-06-10T09:00:00\",\"endTime\":\"2026-06-10T10:00:00\",\"assignedWorkers\":[]}],\"version\":999}"
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status code is 409 Conflict or 400', function () { pm.expect(pm.response.code).to.be.oneOf([400, 409]); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Confirm Schedule - Duplicate Confirm",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
-              }
-            ],
-            "url": {
-              "raw": "http://localhost:8080/api/sessions/{{sessionId}}/confirm",
-              "protocol": "http",
-              "host": [
-                "localhost"
-              ],
-              "port": "8080",
-              "path": [
-                "api",
-                "sessions",
-                "{{sessionId}}",
-                "confirm"
-              ]
+              "raw": "{\n  \"adjustedSlots\": [\n    {\n      \"time\": \"14:00\",\n      \"removed\": \"Member Alpha\",\n      \"added\": \"Member Beta\"\n    }\n  ],\n  \"overrideReason\": \"\"\n}"
             },
-            "body": {
-              "mode": "raw",
-              "raw": "{\"confirmedBlocks\":[{\"startTime\":\"2026-06-10T09:00:00\",\"endTime\":\"2026-06-10T10:00:00\",\"assignedWorkers\":[]}],\"version\":0}"
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status code is 400 Bad Request', function () { pm.response.to.have.status(400); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Verify Admin - Missing Token Body",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
             "url": {
-              "raw": "http://localhost:8080/api/sessions/{{sessionId}}/verify-admin",
-              "protocol": "http",
-              "host": [
-                "localhost"
-              ],
-              "port": "8080",
-              "path": [
-                "api",
-                "sessions",
-                "{{sessionId}}",
-                "verify-admin"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{}"
+              "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/result",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sessions", "{{sessionId}}", "result"]
             }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status code is not 500', function () { pm.expect(pm.response.code).to.not.equal(500); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Create Session - Past Date",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "http://localhost:8080/api/sessions",
-              "protocol": "http",
-              "host": [
-                "localhost"
-              ],
-              "port": "8080",
-              "path": [
-                "api",
-                "sessions"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\"title\":\"Test\",\"domainType\":\"MEETING\",\"startDate\":\"1999-01-01\",\"members\":[{\"name\":\"A\",\"role\":\"B\",\"isMandatory\":true}]}"
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status code is 400 Bad Request', function () { pm.response.to.have.status(400); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Get Recommendations - Missing MandatoryIds",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "http://localhost:8080/api/sessions/{{sessionId}}/recommendations",
-              "protocol": "http",
-              "host": [
-                "localhost"
-              ],
-              "port": "8080",
-              "path": [
-                "api",
-                "sessions",
-                "{{sessionId}}",
-                "recommendations"
-              ]
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status code is not 500', function () { pm.expect(pm.response.code).to.not.equal(500); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Update Availability - Negative Bitmask",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "http://localhost:8080/api/sessions/{{sessionId}}/members/{{memberId1}}/availabilities",
-              "protocol": "http",
-              "host": [
-                "localhost"
-              ],
-              "port": "8080",
-              "path": [
-                "api",
-                "sessions",
-                "{{sessionId}}",
-                "members",
-                "{{memberId1}}",
-                "availabilities"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\"bitmasks\":[-1,0,0,0,0,0,0]}"
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status code is 400 Bad Request', function () { pm.response.to.have.status(400); });"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Confirm Schedule - Invalid Time Format",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
-              }
-            ],
-            "url": {
-              "raw": "http://localhost:8080/api/sessions/{{sessionId}}/confirm",
-              "protocol": "http",
-              "host": [
-                "localhost"
-              ],
-              "port": "8080",
-              "path": [
-                "api",
-                "sessions",
-                "{{sessionId}}",
-                "confirm"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\"confirmedBlocks\":[{\"startTime\":\"���� ���� 3��\",\"endTime\":\"���� �� 10��\",\"assignedWorkers\":[]}],\"version\":1}"
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status code is not 500', function () { pm.expect(pm.response.code).to.not.equal(500); });"
-                ]
-              }
-            }
-          ]
+          }
         }
       ]
     }

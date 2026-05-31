@@ -1,16 +1,14 @@
 import { SLOTS_PER_DAY, slotLabel, type Submission } from "../types";
 import type { Column } from "./TimeGrid";
 
-export type GridBlock = { col: number; start: number; end: number };
-
 type Props = {
   columns: Column[];
   submissions: Submission[];
-  highlights?: GridBlock[] | null;
-  confirmedList?: GridBlock[] | null;
+  highlight?: { col: number; start: number; end: number } | null;
+  confirmed?: { col: number; start: number; end: number } | null;
 };
 
-export function HeatmapGrid({ columns, submissions, highlights, confirmedList }: Props) {
+export function HeatmapGrid({ columns, submissions, highlight, confirmed }: Props) {
   const total = Math.max(submissions.length, 1);
 
   const count = (col: number, slot: number) =>
@@ -63,12 +61,15 @@ export function HeatmapGrid({ columns, submissions, highlights, confirmedList }:
               {columns.map((c, idx) => {
                 const n = count(idx, slot);
                 const isHl =
-                  highlights?.some((h) => h.col === idx && slot >= h.start && slot < h.end) ?? false;
+                  highlight &&
+                  highlight.col === idx &&
+                  slot >= highlight.start &&
+                  slot < highlight.end;
                 const isConfirmed =
-                  confirmedList?.some((c) => c.col === idx && slot >= c.start && slot < c.end) ?? false;
-                const isStartConfirmed = 
-                  confirmedList?.some((c) => c.col === idx && slot === c.start) ?? false;
-                  
+                  confirmed &&
+                  confirmed.col === idx &&
+                  slot >= confirmed.start &&
+                  slot < confirmed.end;
                 const baseColor = isConfirmed ? "bg-emerald-500" : colorFor(n);
                 return (
                   <div
@@ -81,7 +82,7 @@ export function HeatmapGrid({ columns, submissions, highlights, confirmedList }:
                     } ${isConfirmed ? "ring-2 ring-inset ring-emerald-700 z-10" : ""}`}
                     style={{ height: 18 }}
                   >
-                    {isStartConfirmed && (
+                    {isConfirmed && slot === confirmed!.start && (
                       <span className="absolute -top-0.5 left-1 text-[10px] leading-none text-white">
                         ✓ 확정
                       </span>

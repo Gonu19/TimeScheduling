@@ -13,7 +13,4 @@ public interface ParticipantScheduleRepository extends JpaRepository<Participant
 
     @Query("SELECT ps FROM ParticipantSchedule ps JOIN FETCH ps.session JOIN FETCH ps.participant WHERE ps.session.sessionId = :sessionId")
     List<ParticipantSchedule> findAllBySessionId(@Param("sessionId") String sessionId);
-
-    @Query("SELECT MAX(ps.version) FROM ParticipantSchedule ps WHERE ps.session.sessionId = :sessionId")
-    Integer findMaxVersionBySessionId(@Param("sessionId") String sessionId);
 }

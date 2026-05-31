@@ -36,17 +36,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
     public ResponseEntity<ErrorResponse> handleResponseStatusException(org.springframework.web.server.ResponseStatusException ex) {
-        String errorCode = "ERR_FORBIDDEN";
-        if (ex.getStatusCode() == org.springframework.http.HttpStatus.UNAUTHORIZED) {
-            errorCode = "ERR_UNAUTHORIZED_ADMIN";
-        } else if (ex.getStatusCode() == org.springframework.http.HttpStatus.CONFLICT) {
-            errorCode = "ERR_CONFLICT";
-        } else if (ex.getStatusCode() == org.springframework.http.HttpStatus.NOT_FOUND) {
-            errorCode = "ERR_SESSION_NOT_FOUND";
-        } else if (ex.getStatusCode() == org.springframework.http.HttpStatus.BAD_REQUEST) {
-            errorCode = "ERR_BAD_REQUEST";
-        }
-        ErrorResponse response = new ErrorResponse(errorCode, ex.getReason());
+        ErrorResponse response = new ErrorResponse("ERR_FORBIDDEN", ex.getReason());
         return ResponseEntity.status(ex.getStatusCode()).body(response);
     }
 
@@ -55,12 +45,6 @@ public class GlobalExceptionHandler {
         ErrorResponse response = new ErrorResponse(ex.getErrorCode(), ex.getMessage());
         org.springframework.http.HttpStatus status = ex.getStatus() != null ? ex.getStatus() : org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
         return ResponseEntity.status(status.value()).body(response);
-    }
-
-    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
-    public ResponseEntity<ErrorResponse> handleHttpMessageNotReadableException(org.springframework.http.converter.HttpMessageNotReadableException ex) {
-        ErrorResponse response = new ErrorResponse("ERR_INVALID_FORMAT", "요청 데이터의 형식이 올바르지 않습니다.");
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
     @ExceptionHandler(Exception.class)

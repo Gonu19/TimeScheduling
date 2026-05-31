@@ -52,6 +52,6 @@ describe('AvailabilityScreen Component', () => {
     expect(onSubmit).not.toHaveBeenCalled();
     
     // 화면(UI)에 에러 메시지를 띄우는 toast.error가 호출되어야 함
-    expect(toast.error).toHaveBeenCalledWith('가용시간을 최소 한 슬롯 이상 선택해주세요.');
+    expect(toast.error).toHaveBeenCalledWith('가용 시간을 한 칸 이상 선택해주세요.');
   });
 });

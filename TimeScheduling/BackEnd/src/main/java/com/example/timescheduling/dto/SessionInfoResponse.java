@@ -7,6 +7,5 @@ public record SessionInfoResponse(
     String domainType,
     String status,
     List<String> candidateDates,
-    List<MemberInfo> members,
-    String requirementsJson
+    List<MemberInfo> members
 ) {}

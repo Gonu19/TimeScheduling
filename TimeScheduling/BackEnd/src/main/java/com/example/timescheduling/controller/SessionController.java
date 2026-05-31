@@ -43,14 +43,9 @@ public class SessionController {
 
     @GetMapping("/{sessionId}/recommendations")
     public ResponseEntity<java.util.List<com.example.timescheduling.dto.RecommendationResponse>> getRecommendations(
-            @PathVariable("sessionId") String sessionId) {
-        return ResponseEntity.ok(scheduleRecommendationService.getRecommendations(sessionId));
-    }
-
-    @GetMapping("/{sessionId}/work-recommendations")
-    public ResponseEntity<java.util.List<com.example.timescheduling.dto.WorkRecommendationResponse>> getWorkRecommendations(
-            @PathVariable("sessionId") String sessionId) {
-        return ResponseEntity.ok(scheduleRecommendationService.getWorkRecommendations(sessionId));
+            @PathVariable("sessionId") String sessionId,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) java.util.List<Long> mandatoryIds) {
+        return ResponseEntity.ok(scheduleRecommendationService.getRecommendations(sessionId, mandatoryIds));
     }
 
     @PostMapping("/{sessionId}/confirm")
@@ -65,23 +60,17 @@ public class SessionController {
         return ResponseEntity.ok(sessionService.getSessionResult(sessionId));
     }
 
-    @org.springframework.web.bind.annotation.PutMapping("/{sessionId}/requirements")
-    public ResponseEntity<java.util.Map<String, Object>> registerShiftRequirements(
+    @org.springframework.web.bind.annotation.PatchMapping("/{sessionId}/result")
+    public ResponseEntity<com.example.timescheduling.dto.ManualOverrideResponse> manualOverride(
             @PathVariable("sessionId") String sessionId,
             @org.springframework.web.bind.annotation.RequestHeader(value = "Authorization", required = false) String authorization,
-            @Valid @RequestBody com.example.timescheduling.dto.RequirementUpdateRequest request) {
-
+            @RequestBody com.example.timescheduling.dto.ManualOverrideRequest request) {
+        
         String token = null;
         if (authorization != null && authorization.startsWith("Bearer ")) {
             token = authorization.substring(7);
         }
-
-        sessionService.registerShiftRequirements(sessionId, token, request);
-
-        java.util.Map<String, Object> response = new java.util.HashMap<>();
-        response.put("success", true);
-        response.put("message", "근무 요건이 성공적으로 등록되었습니다.");
-
-        return ResponseEntity.ok(response);
+        
+        return ResponseEntity.ok(sessionService.manualOverride(sessionId, token, request));
     }
 }

@@ -120,7 +120,7 @@ class ScheduleRecommendationServiceTest {
                 .thenReturn(List.of(psMandatory, psRegular1, psRegular2));
 
         // When
-        long[] result = scheduleRecommendationService.getMandatoryMatch(sessionId);
+        long[] result = scheduleRecommendationService.getMandatoryMatch(sessionId, null);
 
         // Then
         // Only the mandatory user's availability (bit 10) should be considered.
@@ -139,7 +139,7 @@ class ScheduleRecommendationServiceTest {
         long boundaryBitmask = (1L) | (1L << 47);
 
         // When
-        List<String> activeTimes = ScheduleCalculationHelper.extractActiveTimes(boundaryBitmask);
+        List<String> activeTimes = scheduleRecommendationService.extractActiveTimes(boundaryBitmask);
 
         // Then
         assertThat(activeTimes).hasSize(2);
