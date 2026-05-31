@@ -16,7 +16,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -34,11 +33,10 @@ public class SessionService {
 
     @Transactional
     public SessionCreateResponse createSession(SessionCreateRequest request) {
-        // 후보 날짜 중 가장 빠른 날짜를 startDate로 지정 (또는 오늘)
-        LocalDate startDate = request.candidateDates().stream()
-                .map(LocalDate::parse)
-                .min(LocalDate::compareTo)
-                .orElse(LocalDate.now());
+        java.time.LocalDate startDate = request.startDate();
+        if (startDate == null) {
+            startDate = java.time.LocalDate.now();
+        }
 
         String sessionId = UUID.randomUUID().toString();
         String adminToken = UUID.randomUUID().toString();
@@ -50,6 +48,13 @@ public class SessionService {
                 .purpose(request.domainType())
                 .startDate(startDate)
                 .build();
+        
+        org.slf4j.LoggerFactory.getLogger(SessionService.class)
+                .info("Saving session with parsed LocalDate (KST): {}", session.getStartDate());
+                
+        if (request.requirementsJson() != null && !request.requirementsJson().isBlank()) {
+            session.updateRequirements(request.requirementsJson());
+        }
         
         sessionRepository.save(session);
 
@@ -101,6 +106,7 @@ public class SessionService {
             };
             return new MemberInfo(
                     ps.getScheduleId(),
+                    ps.getParticipant().getParticipantUid(),
                     ps.getParticipant().getNickname(),
                     ps.getParticipant().getRole(),
                     ps.getParticipant().isMandatory(),
@@ -114,7 +120,8 @@ public class SessionService {
                 session.getPurpose(),
                 session.getStatus().name(),
                 candidateDates,
-                members
+                members,
+                session.getRequirementsJson()
         );
     }
 
@@ -122,8 +129,30 @@ public class SessionService {
     public com.example.timescheduling.dto.ConfirmScheduleResponse confirmSchedule(String sessionId, com.example.timescheduling.dto.ConfirmScheduleRequest request) {
         Session session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException("존재하지 않거나 만료된 세션입니다."));
+        // Removed: Allow re-confirming to update roles (assignments) and time blocks adjustments
+        Integer maxVersion = participantScheduleRepository.findMaxVersionBySessionId(sessionId);
+        int currentDbVersion = maxVersion != null ? maxVersion : 0;
+        int requestedVersion = request.version() != null ? request.version() : 0;
         
-        session.confirmSchedule(request.date(), request.startTime(), request.endTime());
+        if (currentDbVersion != requestedVersion) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "추천안을 검토하는 동안 다른 팀원이 가용시간을 수정했습니다.");
+        }
+        
+        session.confirmSchedule(request.confirmedBlocks());
+
+        if (request.assignments() != null && !request.assignments().isEmpty()) {
+            List<com.example.timescheduling.domain.ParticipantSchedule> schedules = participantScheduleRepository.findAllBySessionId(sessionId);
+            for (com.example.timescheduling.domain.ParticipantSchedule ps : schedules) {
+                String newRole = request.assignments().get(ps.getScheduleId());
+                if (newRole != null) {
+                    // Update role directly or via a setter on Participant
+                    // Since Participant has @Getter but not @Setter, we might need a method
+                    // For now, I'll assume we can add a method to Participant or update it via repository if needed
+                    ps.getParticipant().updateRole(newRole);
+                }
+            }
+        }
+
         return new com.example.timescheduling.dto.ConfirmScheduleResponse(session.getSessionId(), session.getStatus().name());
     }
 
@@ -136,55 +165,37 @@ public class SessionService {
             throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "아직 확정되지 않은 세션입니다.");
         }
         
+        Integer maxVersion = participantScheduleRepository.findMaxVersionBySessionId(sessionId);
+        int currentDbVersion = maxVersion != null ? maxVersion : 0;
+
         return new com.example.timescheduling.dto.SessionResultResponse(
             session.getSessionId(),
             session.getTitle(),
-            session.getConfirmedDate(),
-            session.getStartTime(),
-            session.getEndTime()
+            session.getConfirmedBlocks(),
+            currentDbVersion
         );
     }
 
+
     @Transactional
-    public com.example.timescheduling.dto.ManualOverrideResponse manualOverride(String sessionId, String adminToken, com.example.timescheduling.dto.ManualOverrideRequest request) {
+    public void registerShiftRequirements(String sessionId, String adminToken, com.example.timescheduling.dto.RequirementUpdateRequest request) {
         Session session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException("존재하지 않거나 만료된 세션입니다."));
-        
+
         if (adminToken == null || !adminToken.equals(session.getAdminToken())) {
-            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED, "관리자 권한이 없습니다.");
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED, "관리자 권한이 없거나 토큰이 유효하지 않습니다.");
         }
 
-        if (session.getStatus() != com.example.timescheduling.domain.SessionStatus.CONFIRMED) {
-            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "아직 확정되지 않은 세션입니다.");
+        if (session.getStatus() == com.example.timescheduling.domain.SessionStatus.CONFIRMED) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "이미 스케줄이 확정된 세션입니다.");
         }
 
-        if (request.overrideReason() == null || request.overrideReason().trim().isEmpty()) {
-            throw new com.example.timescheduling.exception.CustomApiException(
-                    "ERR_REASON_REQUIRED", 
-                    "스케줄 강제 변경 시, 감사 로그를 위한 수정 사유(overrideReason)는 비어둘 수 없습니다.", 
-                    org.springframework.http.HttpStatus.BAD_REQUEST);
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            String json = mapper.writeValueAsString(request.requirementData());
+            session.updateRequirements(json);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR, "데이터 포맷 변환 오류가 발생했습니다.");
         }
-
-        // Convert adjustedSlots to JSON string simply (or use Jackson ObjectMapper for robustness, here simple builder)
-        // Spring Boot uses Jackson so we could inject ObjectMapper, but for simplicity let's construct JSON manually or rely on basic parsing.
-        // Actually, let's use a quick manual JSON string representation since it's just for DB storage audit.
-        StringBuilder jsonBuilder = new StringBuilder();
-        jsonBuilder.append("[");
-        if (request.adjustedSlots() != null) {
-            for (int i = 0; i < request.adjustedSlots().size(); i++) {
-                com.example.timescheduling.dto.ManualOverrideRequest.AdjustedSlot slot = request.adjustedSlots().get(i);
-                jsonBuilder.append("{")
-                           .append("\"time\":\"").append(slot.time()).append("\",")
-                           .append("\"removed\":\"").append(slot.removed()).append("\",")
-                           .append("\"added\":\"").append(slot.added()).append("\"")
-                           .append("}");
-                if (i < request.adjustedSlots().size() - 1) jsonBuilder.append(",");
-            }
-        }
-        jsonBuilder.append("]");
-
-        session.applyManualOverride(request.overrideReason(), jsonBuilder.toString());
-
-        return new com.example.timescheduling.dto.ManualOverrideResponse("UPDATED", "스케줄이 관리자에 의해 수동 수정되었습니다.");
     }
 }

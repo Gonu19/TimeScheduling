@@ -17,6 +17,7 @@ import {
   type Member,
   type Session,
   type Submission,
+  type ConfirmedSlot,
 } from "../types";
 
 function emptyForDates(n: number): boolean[][] {
@@ -26,11 +27,19 @@ function emptyForDates(n: number): boolean[][] {
 type Props = {
   session: Session;
   submissions: Submission[];
+  confirmed: ConfirmedSlot | null;
   onSubmit: (s: Submission) => Promise<void>;
   onGoDashboard: () => void;
 };
 
-export function AvailabilityScreen({ session, submissions, onSubmit, onGoDashboard }: Props) {
+// 날짜 포맷 헬퍼 (DashboardScreen 참고)
+const fmtDateLong = (dStr: string) => {
+  const d = new Date(dStr);
+  const w = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
+  return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 (${w})`;
+};
+
+export function AvailabilityScreen({ session, submissions, confirmed, onSubmit, onGoDashboard }: Props) {
   const submittedIds = useMemo(
     () => new Set(submissions.map((s) => s.memberId)),
     [submissions],
@@ -107,15 +116,55 @@ export function AvailabilityScreen({ session, submissions, onSubmit, onGoDashboa
         <div className="max-w-7xl mx-auto space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-500">
+              <p className="text-gray-500 mb-1">
                 세션 · {session.domainType === "MEETING" ? "회의" : "근무"}
               </p>
-              <h2 className="text-gray-900">{session.title}</h2>
+              <h2 className="text-gray-900 text-2xl font-bold">{session.title}</h2>
+              {session.dates && session.dates.length > 0 && (
+                <div className="mt-2 inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-md font-medium">
+                  🗓 대상 일정: {fmtDateLong(session.dates[0])} ~ {fmtDateLong(session.dates[session.dates.length - 1])}
+                </div>
+              )}
             </div>
             <Button variant="outline" onClick={onGoDashboard}>
               관리자 대시보드 보기
             </Button>
           </div>
+
+          {confirmed && confirmed.confirmedBlocks && confirmed.confirmedBlocks.length > 0 && (
+            <Card className="border-green-300 bg-green-50 shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-green-700">
+                  <Check className="w-5 h-5" /> 일정이 확정되었습니다!
+                </CardTitle>
+                <CardDescription className="text-green-700/80">
+                  관리자가 팀의 {session.domainType === "WORK" ? "근무 일정" : "회의 일정"}을 아래와 같이 확정했습니다.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {confirmed.confirmedBlocks.map((tb: any, i: number) => {
+                    const dStr = tb.startTime.split("T")[0];
+                    const sStr = tb.startTime.split("T")[1].substring(0, 5);
+                    const eStr = tb.endTime.split("T")[1].substring(0, 5);
+                    return (
+                      <div key={i} className="bg-white border border-green-200 rounded p-3">
+                        <div className="font-medium text-gray-900">{fmtDateLong(dStr)}</div>
+                        <div className="text-gray-700 text-lg font-semibold my-1">
+                          {sStr} ~ {eStr === "00:00" ? "24:00" : eStr}
+                        </div>
+                        {tb.assignedWorkers && tb.assignedWorkers.length > 0 && (
+                          <div className="text-sm text-blue-700 bg-blue-50 px-2 py-1 rounded inline-block mt-1">
+                            배정: {tb.assignedWorkers.map((w: any) => w.isMandatory ? `${w.name} ★` : w.name).join(", ")}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>
@@ -175,8 +224,8 @@ export function AvailabilityScreen({ session, submissions, onSubmit, onGoDashboa
               <ArrowLeft className="w-4 h-4" /> 멤버 선택
             </Button>
             <div>
-              <p className="text-gray-500">{session.title}</p>
-              <h2 className="text-gray-900 flex items-center gap-2">
+              <p className="text-gray-500 mb-1">{session.title}</p>
+              <h2 className="text-gray-900 text-xl font-bold flex items-center gap-2">
                 {selected.name}
                 <span className="text-gray-400">·</span>
                 <span className="text-gray-500">{selected.role}</span>
@@ -186,6 +235,11 @@ export function AvailabilityScreen({ session, submissions, onSubmit, onGoDashboa
                   </span>
                 )}
               </h2>
+              {session.dates && session.dates.length > 0 && (
+                <div className="mt-2 inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-md font-medium text-sm">
+                  🗓 대상 일정: {fmtDateLong(session.dates[0])} ~ {fmtDateLong(session.dates[session.dates.length - 1])}
+                </div>
+              )}
             </div>
           </div>
           <Button variant="outline" onClick={onGoDashboard}>
