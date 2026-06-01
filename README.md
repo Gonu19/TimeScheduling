@@ -27,7 +27,7 @@
 
 ## 🛠️ 기술 스택
 
-### 后端 (Spring Boot)
+### Backend (Spring Boot)
 - **Language:** Java 21
 - **Framework:** Spring Boot 3.2.5
 - **Database:** MySQL 8.0
